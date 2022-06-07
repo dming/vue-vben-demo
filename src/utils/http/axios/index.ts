@@ -24,69 +24,19 @@ const urlPrefix = globSetting.urlPrefix;
 const { createMessage, createErrorModal } = useMessage();
 
 /**
+ * 顺序
+ * beforeRequestHook
+ * requestInterceptors requestInterceptorsCatch
+ * responseInterceptors responseInterceptorsCatch
+ * transformRequestHook requestCatchHook
+ */
+/**
  * @description: 数据处理，方便区分多种处理方式
  */
 const transform: AxiosTransform = {
-  /**
-   * @description: 处理请求数据。如果数据不是预期格式，可直接抛出错误
-   */
-  transformRequestHook: (res: AxiosResponse<Result>, options: RequestOptions) => {
-    const { t } = useI18n();
-    const { isTransformResponse, isReturnNativeResponse } = options;
-    // 是否返回原生响应头 比如：需要获取响应头时使用该属性
-    if (isReturnNativeResponse) {
-      return res;
-    }
-    // 不进行任何处理，直接返回
-    // 用于页面代码可能需要直接获取code，data，message这些信息时开启
-    if (!isTransformResponse) {
-      return res.data;
-    }
-    // 错误的时候返回
-
-    const { data } = res;
-    if (!data) {
-      // return '[HTTP] Request has no return value';
-      throw new Error(t('sys.api.apiRequestFailed'));
-    }
-    //  这里 code，result，message为 后台统一的字段，需要在 types.ts内修改为项目自己的接口返回格式
-    const { code, result, message } = data;
-
-    // 这里逻辑可以根据项目进行修改
-    const hasSuccess = data && Reflect.has(data, 'code') && code === ResultEnum.SUCCESS;
-    if (hasSuccess) {
-      return result;
-    }
-
-    // 在此处根据自己项目的实际情况对不同的code执行不同的操作
-    // 如果不希望中断当前请求，请return数据，否则直接抛出异常即可
-    let timeoutMsg = '';
-    switch (code) {
-      case ResultEnum.TIMEOUT:
-        timeoutMsg = t('sys.api.timeoutMessage');
-        const userStore = useUserStoreWithOut();
-        userStore.setToken(undefined);
-        userStore.logout(true);
-        break;
-      default:
-        if (message) {
-          timeoutMsg = message;
-        }
-    }
-
-    // errorMessageMode=‘modal’的时候会显示modal错误弹窗，而不是消息提示，用于一些比较重要的错误
-    // errorMessageMode='none' 一般是调用时明确表示不希望自动弹出错误提示
-    if (options.errorMessageMode === 'modal') {
-      createErrorModal({ title: t('sys.api.errorTip'), content: timeoutMsg });
-    } else if (options.errorMessageMode === 'message') {
-      createMessage.error(timeoutMsg);
-    }
-
-    throw new Error(timeoutMsg || t('sys.api.apiRequestFailed'));
-  },
-
   // 请求之前处理config
   beforeRequestHook: (config, options) => {
+    console.warn('dming change beforeRequestHook');
     const { apiUrl, joinPrefix, joinParamsToUrl, formatDate, joinTime = true, urlPrefix } = options;
 
     if (joinPrefix) {
@@ -138,6 +88,7 @@ const transform: AxiosTransform = {
    * @description: 请求拦截器处理
    */
   requestInterceptors: (config, options) => {
+    console.warn('dming change requestInterceptors');
     // 请求之前处理config
     const token = getToken();
     if (token && (config as Recordable)?.requestOptions?.withToken !== false) {
@@ -153,6 +104,7 @@ const transform: AxiosTransform = {
    * @description: 响应拦截器处理
    */
   responseInterceptors: (res: AxiosResponse<any>) => {
+    console.warn('dming change responseInterceptors');
     return res;
   },
 
@@ -160,6 +112,7 @@ const transform: AxiosTransform = {
    * @description: 响应错误处理
    */
   responseInterceptorsCatch: (axiosInstance: AxiosResponse, error: any) => {
+    console.warn('dming change responseInterceptorsCatch');
     const { t } = useI18n();
     const errorLogStore = useErrorLogStoreWithOut();
     errorLogStore.addAjaxErrorInfo(error);
@@ -199,6 +152,67 @@ const transform: AxiosTransform = {
       // @ts-ignore
       retryRequest.retry(axiosInstance, error);
     return Promise.reject(error);
+  },
+
+  /**
+   * @description: 处理请求数据。如果数据不是预期格式，可直接抛出错误
+   */
+  transformRequestHook: (res: AxiosResponse<Result>, options: RequestOptions) => {
+    console.warn('dming change transformRequestHook');
+    // return res;
+    const { t } = useI18n();
+    const { isTransformResponse, isReturnNativeResponse } = options;
+    // 是否返回原生响应头 比如：需要获取响应头时使用该属性
+    if (isReturnNativeResponse) {
+      return res;
+    }
+    // 不进行任何处理，直接返回
+    // 用于页面代码可能需要直接获取code，data，message这些信息时开启
+    if (!isTransformResponse) {
+      return res.data;
+    }
+    // 错误的时候返回
+    const { data } = res;
+    if (!data) {
+      console.error('createErrorModal', t('sys.api.apiRequestFailed'));
+      // return '[HTTP] Request has no return value';
+      throw new Error(t('sys.api.apiRequestFailed'));
+    }
+    //  这里 code，result，message为 后台统一的字段，需要在 types.ts内修改为项目自己的接口返回格式
+    const { code, result, message } = data;
+
+    // 这里逻辑可以根据项目进行修改
+    const hasSuccess = data && Reflect.has(data, 'code') && code === ResultEnum.SUCCESS;
+    if (hasSuccess) {
+      return result;
+    }
+
+    // 在此处根据自己项目的实际情况对不同的code执行不同的操作
+    // 如果不希望中断当前请求，请return数据，否则直接抛出异常即可
+    let timeoutMsg = '';
+    switch (code) {
+      case ResultEnum.TIMEOUT:
+        timeoutMsg = t('sys.api.timeoutMessage');
+        const userStore = useUserStoreWithOut();
+        userStore.setToken(undefined);
+        userStore.logout(true);
+        break;
+      default:
+        if (message) {
+          timeoutMsg = message;
+        }
+    }
+
+    // errorMessageMode=‘modal’的时候会显示modal错误弹窗，而不是消息提示，用于一些比较重要的错误
+    // errorMessageMode='none' 一般是调用时明确表示不希望自动弹出错误提示
+    if (options.errorMessageMode === 'modal') {
+      console.error('createErrorModal');
+      createErrorModal({ title: t('sys.api.errorTip'), content: timeoutMsg });
+    } else if (options.errorMessageMode === 'message') {
+      createMessage.error(timeoutMsg);
+    }
+    console.error('createErrorModal2');
+    throw new Error(timeoutMsg || t('sys.api.apiRequestFailed'));
   },
 };
 
@@ -245,11 +259,11 @@ function createAxios(opt?: Partial<CreateAxiosOptions>) {
           withToken: true,
           retryRequest: {
             isOpenRetry: true,
-            count: 5,
-            waitTime: 100,
+            count: 2,
+            waitTime: 1000,
           },
         },
-      },
+      } as CreateAxiosOptions,
       opt || {},
     ),
   );
